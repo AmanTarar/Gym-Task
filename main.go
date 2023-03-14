@@ -26,7 +26,7 @@ import (
 
 
 type enrolledInfo struct{
-	gorm.Model
+
 
 	Id             string  `json:"id" gorm:"default:uuid_generate_v4()"`
 	Name string `json:"name"`
@@ -37,18 +37,20 @@ type enrolledInfo struct{
 	MemberShipTYPE string `json:"memberShip_Type"`
 	Refund float64 `json:"refund"`
 	MemberShip string `json:"memberShip"`
+	
 
 }
 
 
 type MembershipTypePrice struct {
+
 		Name  string `json:"name"`
 		Price float64 `json:"price"`
 	
 }
 	
 //Global for current membership Price
-var membershiptypeprice = map[string]float64{"Gold": 2000, "Silver": 1000}
+// var membershiptypeprice = map[string]float64{"Gold": 2000, "Silver": 1000}
 
 
 
@@ -79,7 +81,7 @@ func CustomerEnrolments(w http.ResponseWriter, r *http.Request) {
 
 
 
-var memtypeprice MembershipTypePrice
+	var memtypeprice MembershipTypePrice
  
 // monthly price and duration set krna hai
 
@@ -128,16 +130,7 @@ var memtypeprice MembershipTypePrice
 	}
 
 	
-	// newEnrolinputinBytes,_:=json.Marshal(newEnrolinput)
-	// fmt.Fprintf(w,"updated price of membership types\n")
-	// w.Write(newEnrolinputinBytes)
-
-
-	// enrolmentdataBASE=append(enrolmentdataBASE,newEnrolinput)
-	// fmt.Println("new customer enrolled")
-	// fmt.Println("enrolmentdataBASE",enrolmentdataBASE)
-	// enrolmentdataBASEinBytes,_:=json.Marshal(enrolmentdataBASE)
-	// w.Write(CustomerEnrolmentsData)
+	
 
   
 
@@ -162,12 +155,33 @@ var memtypeprice MembershipTypePrice
 // }
 
 
+
+//create membership price database
+//working
+func CreateMembershipPriceDB(w http.ResponseWriter,r *http.Request){
+
+//post request
+
+	var memtypePrice MembershipTypePrice
+	_=json.NewDecoder(r.Body).Decode(&memtypePrice)
+
+	result:=db.Create(&memtypePrice)
+	if result.Error!=nil{
+		fmt.Println("error in DB")
+	}
+
+	json.NewEncoder(w).Encode(&memtypePrice)
+	fmt.Fprint(w,"membershipPrice has been successfully set")
+
+}
+
+//working
 func SetMembershipPrice(w http.ResponseWriter,r *http.Request){
 
 //function to change or update the price of membership types
 
 	//fmt.Println("prices will update soon")
-	fmt.Fprintln(w, "Now you can update membership prices!!")
+	fmt.Fprintln(w, "updated membership prices!!")
 	var memtypePrice MembershipTypePrice
 	_=json.NewDecoder(r.Body).Decode(&memtypePrice)
 	
@@ -189,24 +203,23 @@ func SetMembershipPrice(w http.ResponseWriter,r *http.Request){
 func DeleteMembership(w http.ResponseWriter,r *http.Request){
 
 //delete the membership function
-var enroldata enrolledInfo
 
-_=json.NewDecoder(r.Body).Decode(&enroldata)
+     params := mux.Vars(r)
 
-	for _,v:=range enrolmentdataBASE{
+	 var enrol enrolledInfo
 
-		if enroldata.Name==v.Name{
-			//fmt.Println(v.Name,":is deleted from database")
-			//enrolmentdataBASE=append(enrolmentdataBASE[:i],enrolmentdataBASE[i+1:]... )
-			v.MemberShip="INACTIVE"
+	           db.Where("id=?", params["id"]).First(&enrol)
+				fmt.Println(enrol.Name,":is deleted from database")
+				//enrolmentdataBASE=append(enrolmentdataBASE[:i],enrolmentdataBASE[i+1:]... )
+				enrol.MemberShip="INACTIVE"
 			
 			
-			fmt.Println(v.Name," membership has been deactivated")
-			fmt.Println("enrolmentdataBASE",enrolmentdataBASE)
+				fmt.Println(enrol.Name," membership has been deactivated")
+				fmt.Println("enrolmentdataBASE",enrolmentdataBASE)
 
 			    //refund calculated price
 				currentTime:=time.Now().Format("2006-01-02")
-				v.EndDate=currentTime
+				enrol.EndDate=currentTime
 
 				currentTimesliced:=strings.Split(currentTime,"-")
 				monthinString:=currentTimesliced[1]
@@ -215,49 +228,79 @@ _=json.NewDecoder(r.Body).Decode(&enroldata)
 					fmt.Println("fatt gya")
 				}
 				//duartion -intmonth
-				refundMonth:=v.Duration-intmonth
-				v.Duration=v.Duration-refundMonth
+				refundMonth:=enrol.Duration-intmonth
+				enrol.Duration=enrol.Duration-refundMonth
 
-				if v.MemberShipTYPE=="gold"{
-					v.Refund=(float64(refundMonth)*membershiptypeprice["Gold"])/2
+
+				var memtypeprice MembershipTypePrice
+
+				if enrol.MemberShipTYPE=="gold"{
+					db.Where("name = ?", "Gold").First(&memtypeprice)
+					enrol.Refund=(float64(refundMonth)*memtypeprice.Price/2)
 
 				}else{
 
-					v.Refund=(float64(refundMonth)*membershiptypeprice["Silver"])/2
+					db.Where("name = ?", "Silver").First(&memtypeprice)
+					enrol.Refund=(float64(refundMonth)*memtypeprice.Price/2)
 				}
-				fmt.Println("details with refund added",v.Name)
+				fmt.Println("details with refund added",enrol.Name)
 
-				v_in_Bytes,_:=json.Marshal(v)
-				w.Write(v_in_Bytes)
-				fmt.Println("",v)
-			return
-		}
+				// enrol_in_Bytes,_:=json.Marshal(enrol)
+				// w.Write(enrol_in_Bytes)
+				// fmt.Println("",enrol)
+
+
+				db.Where("id =?", params["id"]).Updates(&enrolledInfo{Refund: enrol.Refund, Duration: enrol.Duration, EndDate: time.Now().Format("2006-01-02"), MemberShip:enrol.MemberShip })
+				db.Where("id=?", params["id"]).Delete(&enrol)
+				fmt.Fprint(w,"this record has been deleted\n\n")
+				json.NewEncoder(w).Encode(&enrol)
+				
+			
+		
+		
 		
 
-	}
-	fmt.Println("member not found in database")
 
+	
+	fmt.Fprint(w,"Not present in database")
+	
 }
+	
 
+
+//Working
 func CustomerEnrolmentsDatabyID(w http.ResponseWriter, r *http.Request) {
+
+	w.Header().Set("Content-Type", "application/json")
 	params := mux.Vars(r)
 	var enrollment enrolledInfo
-	db.First(&enrollment, params["id"])
+	
+	
+	
+	db.Where("id=?",params["id"]).First(&enrollment)
 	json.NewEncoder(w).Encode(&enrollment)
+	fmt.Fprintf(w,"here is your customer with id")
+	
 }
 
+//working
 func CustomerEnrolmentsData(w http.ResponseWriter,r * http.Request){
 
 
-	params := mux.Vars(r)
-	var enrollmentrecord enrolledInfo
-	db.First(&enrollmentrecord, params["id"])
-	json.NewEncoder(w).Encode(&enrollmentrecord)
+	// Reading from DB
+	result := db.Unscoped().Find(&enrolmentdataBASE)
+	if result.Error != nil {
+		http.Error(w, "Reading users failed", http.StatusNotFound)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(enrolmentdataBASE) // this will send response as a json value
+	fmt.Fprintf(w, "Reading successful")
 }
 
 //All DATABASES
 //------------------------------------------>
-//dataBASE for enrolments
+//dataBASE in slice form, for enrolments
 var enrolmentdataBASE []enrolledInfo
 
 
@@ -294,32 +337,22 @@ fmt.Println("DB connection established")
 
 //defer db.Close()
 
-db.AutoMigrate(&enrolledInfo{})
+db.AutoMigrate(&enrolledInfo{},&MembershipTypePrice{})
 
 
 
-router.HandleFunc("/gym", CustomerEnrolmentsData).Methods("GET")
-router.HandleFunc("/gym/{id}", CustomerEnrolmentsDatabyID)
-router.HandleFunc("/gym", CustomerEnrolments)
-router.HandleFunc("/gym/{id}", DeleteMembership).Methods("DELETE")
+
+router.HandleFunc("/gym/enrollmentData", CustomerEnrolmentsData)
+router.HandleFunc("/gym/enrollmentData/{id}", CustomerEnrolmentsDatabyID)
+router.HandleFunc("/gym/enrollment", CustomerEnrolments)
+router.HandleFunc("/gym/deleteMember/{id}", DeleteMembership)//
 router.HandleFunc("/gym/setPrice", SetMembershipPrice)
+router.HandleFunc("/gym/createMembershipPrice",CreateMembershipPriceDB)//post method
+
 
 
 
 log.Fatal(http.ListenAndServe(":8080", router))
-
-
-
-
-	// fmt.Println("working...")
-	// http.HandleFunc("/CustomerEnrolments", CustomerEnrolments)
-	// http.HandleFunc("/SetMembershipPrice",SetMembershipPrice)
-	// http.HandleFunc("/DeleteMembership", DeleteMembership)
-	
-	
-
-
-	
 	// fmt.Println("dataBASE",dataBASE)
 
 
